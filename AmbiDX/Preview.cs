@@ -1,13 +1,14 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Text;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using AmbiDX.Settings;
 using PixelCapturer;
 using Font = System.Drawing.Font;
 using Process = System.Diagnostics.Process;
@@ -25,6 +26,10 @@ namespace AmbiDX
         private readonly Button _lightsOn;
         private readonly Button _lightsOff;
         private readonly ComboBox _processes;
+        private readonly Button _addToWatcher;
+        private readonly Button _removeFromWatcher;
+        private readonly ListBox _watcher;
+
         private ProcessListItem _selectedProcess;
         private AutoResetEvent _serialDataAvailable;
 
@@ -98,6 +103,27 @@ namespace AmbiDX
 
             Controls.Add(_processes);
 
+            _addToWatcher = new Button
+            {
+                Text = @"Add >>",
+                BackColor = SystemColors.Control
+            };
+            _addToWatcher.Click += AddToWatcherOnClick;
+            Controls.Add(_addToWatcher);
+
+            _removeFromWatcher = new Button
+            {
+                Text = @"<< Remove",
+                BackColor = SystemColors.Control
+            };
+            _removeFromWatcher.Click += RemoveFromWatcherOnClick;
+            Controls.Add(_removeFromWatcher);
+
+            _watcher = new ListBox();            
+            _watcher.Items.AddRange(ProcessSettingsHandler.GetProcessNames().Cast<object>().ToArray());
+
+            Controls.Add(_watcher);
+
             _status = new ToolStripStatusLabel();
             _toolstrip = new ToolStrip(_status)
             {
@@ -122,17 +148,17 @@ namespace AmbiDX
                 .ToList();
 
             ledLayouts.ForEach(ledLayout =>
-            {
-                var screenLabel = new Label
                 {
-                    Text = $"Screen {ledLayout.Screen}",
-                    Left = width * ledLayout.Columns,
-                    ForeColor = Color.White
-                };
+                    var screenLabel = new Label
+                    {
+                        Text = $"Screen {ledLayout.Screen}",
+                        Left = width * ledLayout.Columns,
+                        ForeColor = Color.White
+                    };
 
-                Controls.Add(screenLabel);
-                screenLabel.Top = height * ledLayout.Rows + topOffset - screenLabel.Height;
-            });
+                    Controls.Add(screenLabel);
+                    screenLabel.Top = height * ledLayout.Rows + topOffset - screenLabel.Height;
+                });
 
             foreach (var led in Config.Leds)
             {
@@ -150,6 +176,22 @@ namespace AmbiDX
                     ForeColor = Color.White
                 });
             }
+        }
+
+        private void RemoveFromWatcherOnClick(object sender, EventArgs eventArgs)
+        {
+            ProcessSettingsHandler.Delete(new ProcessElement { Name = _watcher.SelectedItem.ToString() });
+            _watcher.Items.Remove(_watcher.SelectedItem);
+        }
+
+        private void AddToWatcherOnClick(object sender, EventArgs eventArgs)
+        {
+            if (_watcher.Items.Cast<string>().Contains(_selectedProcess.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                return;
+            }
+            _watcher.Items.Add(_selectedProcess.Name);
+            ProcessSettingsHandler.Save(new ProcessElement { Name = _selectedProcess.Name });
         }
 
         public override sealed bool AutoSize
@@ -196,15 +238,30 @@ namespace AmbiDX
             buttonTop = 0;
 
             // Third column
-            Func<ComboBox, int> calculateWidth = comboBox =>
+            Func<ListControl, IEnumerable, int> calculateWidth = (list, items) =>
             {
-                var maxItemWidth = (from object item in comboBox.Items select TextRenderer.MeasureText(comboBox.GetItemText(item), comboBox.Font).Width)
-                    .Concat(new[] { 0 })
+                var maxItemWidth = (from object item in items select TextRenderer.MeasureText(list.GetItemText(item), list.Font).Width)
+                    .Concat(new[] { 100 })
                     .Max();
                 return maxItemWidth + SystemInformation.VerticalScrollBarWidth;
             };
-            _processes.DropDownWidth = _processes.Width = calculateWidth(_processes);
+            _processes.DropDownWidth = _processes.Width = calculateWidth(_processes, _processes.Items);
             _processes.Location = new Point(buttonLeft, buttonTop);
+
+            buttonLeft += _processes.DropDownWidth + buttonXOffset;
+            buttonTop = 0;
+
+            // Fourth column
+            _addToWatcher.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(buttonWidth, buttonHeight));
+            buttonTop += buttonHeight + buttonYOffset;
+            _removeFromWatcher.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(buttonWidth, buttonHeight));
+
+            buttonLeft += buttonWidth + buttonXOffset;
+            buttonTop = 0;
+
+            // Fifth column
+            _watcher.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(calculateWidth(_watcher, _watcher.Items), 200));
+            _watcher.Height = _removeFromWatcher.Bottom;
 
             base.OnLoad(e);
         }
@@ -287,7 +344,7 @@ namespace AmbiDX
         readonly ReaderWriterLockSlim _ledDataLock = new ReaderWriterLockSlim();
         private int[,] _ledData;
         private AutoResetEvent _ledDataAvailable;
-        
+
         private void StartUpdatingPreviewTask()
         {
             var updateLedUiTask = new Task(() =>
@@ -299,19 +356,19 @@ namespace AmbiDX
                     {
                         return;
                     }
-          
+
                     _ledDataLock.EnterReadLock();
                     var ledColors = new int[_ledData.GetLength(0), _ledData.GetLength(1)];
                     Buffer.BlockCopy(_ledData, 0, ledColors, 0, _ledData.Length * 4);
                     _ledDataLock.ExitReadLock();
-                    
+
                     MethodInvoker updateLedUi = delegate
                     {
                         //var colors = new List<Color>();
                         for (var i = ledColors.GetLength(0) - 1; i >= 0; i--)
                         {
                             var ledColor = Color.FromArgb(255, ledColors[i, 0], ledColors[i, 1], ledColors[i, 2]);
-                          //  colors.Add(ledColor);
+                            //  colors.Add(ledColor);
                             var col = Config.Leds[i][1];
                             var row = Config.Leds[i][2];
                             var label = Controls.Find($"0-{col}-{row}", false).First();

@@ -2,7 +2,7 @@
 {
     public static class Config
     {
-        public const bool EnableSerialCommunication = true;
+        public const bool EnableSerialCommunication = false;
         public const int SerialBaud = 115200;
         public const Port SerialPort = Port.Com3;
 

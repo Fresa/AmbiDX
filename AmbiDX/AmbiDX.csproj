@@ -69,6 +69,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AdaLedSerialWriter.cs" />
+    <Compile Include="ControlExtensions.cs" />
     <Compile Include="DummySerialWriter.cs" />
     <Compile Include="ISerialWriter.cs" />
     <Compile Include="Preview.cs">

@@ -17,7 +17,7 @@ namespace AmbiDX
 {
     public partial class Preview : Form
     {
-        private CancellationTokenSource _cancel;
+        private readonly CancellationTokenSource _cancel;
         private readonly byte[] _darkLeds;
         private readonly Button _stop;
         private readonly Button _capture;
@@ -29,8 +29,8 @@ namespace AmbiDX
         private readonly Button _addToWatcher;
         private readonly Button _removeFromWatcher;
         private readonly ListBox _watcher;
+        private CheckBox _autoDetectProcesses;
 
-        private ProcessListItem _selectedProcess;
         private AutoResetEvent _serialDataAvailable;
 
         public Preview()
@@ -96,10 +96,6 @@ namespace AmbiDX
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 DataSource = processItems
             };
-            _processes.SelectedValueChanged += (sender, args) =>
-            {
-                _selectedProcess = (ProcessListItem)_processes.SelectedItem;
-            };
 
             Controls.Add(_processes);
 
@@ -119,10 +115,17 @@ namespace AmbiDX
             _removeFromWatcher.Click += RemoveFromWatcherOnClick;
             Controls.Add(_removeFromWatcher);
 
-            _watcher = new ListBox();            
+            _watcher = new ListBox();
             _watcher.Items.AddRange(ProcessSettingsHandler.GetProcessNames().Cast<object>().ToArray());
-
             Controls.Add(_watcher);
+
+            _autoDetectProcesses = new CheckBox
+            {
+                Checked = true,
+                Text = @"Auto detect",
+                ForeColor = Color.White
+            };
+            Controls.Add(_autoDetectProcesses);
 
             _status = new ToolStripStatusLabel();
             _toolstrip = new ToolStrip(_status)
@@ -148,25 +151,26 @@ namespace AmbiDX
                 .ToList();
 
             ledLayouts.ForEach(ledLayout =>
+            {
+                var screenLabel = new Label
                 {
-                    var screenLabel = new Label
-                    {
-                        Text = $"Screen {ledLayout.Screen}",
-                        Left = width * ledLayout.Columns,
-                        ForeColor = Color.White
-                    };
+                    Text = $"Screen {ledLayout.Screen}",
+                    Left = width * ledLayout.Columns,
+                    ForeColor = Color.White
+                };
 
-                    Controls.Add(screenLabel);
-                    screenLabel.Top = height * ledLayout.Rows + topOffset - screenLabel.Height;
-                });
+                Controls.Add(screenLabel);
+                screenLabel.Top = height * ledLayout.Rows + topOffset - screenLabel.Height;
+            });
 
             foreach (var led in Config.Leds)
             {
+                var screen = led[0];
                 var left = width * led[1];
                 var top = height * led[2] + topOffset;
                 Controls.Add(new Label
                 {
-                    Name = $"0-{led[1]}-{led[2]}",
+                    Name = $"{screen}-{led[1]}-{led[2]}",
                     Text = $"{led[1]},{led[2]}",
                     Font = font,
                     Width = width,
@@ -175,6 +179,13 @@ namespace AmbiDX
                     Top = top,
                     ForeColor = Color.White
                 });
+            }
+
+            _cancel = new CancellationTokenSource();
+
+            if (_autoDetectProcesses.Checked)
+            {
+                StartDetectingWatchedProcesses();
             }
         }
 
@@ -186,12 +197,13 @@ namespace AmbiDX
 
         private void AddToWatcherOnClick(object sender, EventArgs eventArgs)
         {
-            if (_watcher.Items.Cast<string>().Contains(_selectedProcess.Name, StringComparer.CurrentCultureIgnoreCase))
+            var selectedProcess = ((ProcessListItem)_processes.SelectedItem).Name;
+            if (_watcher.Items.Cast<string>().Contains(selectedProcess, StringComparer.CurrentCultureIgnoreCase))
             {
                 return;
             }
-            _watcher.Items.Add(_selectedProcess.Name);
-            ProcessSettingsHandler.Save(new ProcessElement { Name = _selectedProcess.Name });
+            _watcher.Items.Add(selectedProcess);
+            ProcessSettingsHandler.Save(new ProcessElement { Name = selectedProcess });
         }
 
         public override sealed bool AutoSize
@@ -204,6 +216,14 @@ namespace AmbiDX
         {
             get { return base.BackColor; }
             set { base.BackColor = value; }
+        }
+
+        private static int CalculateMaxWidth(ListControl list, IEnumerable items)
+        {
+            var maxItemWidth = (from object item in items select TextRenderer.MeasureText(list.GetItemText(item), list.Font).Width)
+                .Concat(new[] { 100 })
+                .Max();
+            return maxItemWidth + SystemInformation.VerticalScrollBarWidth;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -238,14 +258,7 @@ namespace AmbiDX
             buttonTop = 0;
 
             // Third column
-            Func<ListControl, IEnumerable, int> calculateWidth = (list, items) =>
-            {
-                var maxItemWidth = (from object item in items select TextRenderer.MeasureText(list.GetItemText(item), list.Font).Width)
-                    .Concat(new[] { 100 })
-                    .Max();
-                return maxItemWidth + SystemInformation.VerticalScrollBarWidth;
-            };
-            _processes.DropDownWidth = _processes.Width = calculateWidth(_processes, _processes.Items);
+            _processes.DropDownWidth = _processes.Width = CalculateMaxWidth(_processes, _processes.Items);
             _processes.Location = new Point(buttonLeft, buttonTop);
 
             buttonLeft += _processes.DropDownWidth + buttonXOffset;
@@ -260,8 +273,14 @@ namespace AmbiDX
             buttonTop = 0;
 
             // Fifth column
-            _watcher.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(calculateWidth(_watcher, _watcher.Items), 200));
+            _watcher.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(CalculateMaxWidth(_watcher, _watcher.Items), 200));
             _watcher.Height = _removeFromWatcher.Bottom;
+
+            buttonLeft += _watcher.Width + buttonXOffset;
+            buttonTop = 0;
+
+            // Sixth column
+            _autoDetectProcesses.Bounds = new Rectangle(new Point(buttonLeft, buttonTop), new Size(buttonWidth, buttonHeight));
 
             base.OnLoad(e);
         }
@@ -270,17 +289,34 @@ namespace AmbiDX
 
         private void startCapturing_Click(object sender, EventArgs e)
         {
-            if (_selectedProcess.Id == -1)
+            _autoDetectProcesses.Checked = false;
+            StartCapture(((ProcessListItem)_processes.SelectedItem).Id);
+        }
+
+        private void StartCapture(int processId)
+        {
+            lock (_capturingLock)
             {
+                if (_capturing)
+                {
+                    return;
+                }
+                _capturing = true;
+            }
+
+            if (processId == -1)
+            {
+                UpdateStatus(@"Starting capturing front buffer");
                 _screenCapturingProcesses = Config.Displays.Select(displayConfig => new FrontbufferCapturer(displayConfig[0])).ToList();
             }
             else
             {
+                UpdateStatus($"Starting capturing back buffer from process with id {processId}");
                 _screenCapturingProcesses = new[] { new BackbufferCapturingProcess() };
             }
 
-            _stop.Enabled = true;
-            _capture.Enabled = false;
+            _stop.Invoke(stop => stop.Enabled = true);
+            _capture.Invoke(capture => capture.Enabled = false);
 
             _serialDataAvailable = new AutoResetEvent(false);
             _ledDataAvailable = new AutoResetEvent(false);
@@ -290,7 +326,6 @@ namespace AmbiDX
 
             //decimal avg = 0;
 
-            _cancel = new CancellationTokenSource();
             foreach (var screenCapture in _screenCapturingProcesses)
             {
                 screenCapture.OnScreenCaptured(ledColors =>
@@ -332,7 +367,7 @@ namespace AmbiDX
                     //Invoke(updateStatus);
                 }, _cancel);
 
-                screenCapture.Start(_selectedProcess.Id);
+                screenCapture.Start(processId);
             }
         }
 
@@ -344,6 +379,40 @@ namespace AmbiDX
         readonly ReaderWriterLockSlim _ledDataLock = new ReaderWriterLockSlim();
         private int[,] _ledData;
         private AutoResetEvent _ledDataAvailable;
+
+        private bool _capturing;
+        private readonly object _capturingLock = new object();
+
+        private void StartDetectingWatchedProcesses()
+        {
+            var detectingWachedProcessesTask = new Task(() =>
+            {
+                UpdateStatus(@"Searching for processes...");
+
+                while (true)
+                {
+                    Thread.Sleep(100);
+                    if (_cancel.Token.IsCancellationRequested)
+                    {
+                        UpdateStatus("");
+                        return;
+                    }
+
+                    var watchedProcesses = _watcher.Invoke(watcher => watcher.Items.Cast<string>().ToArray());
+                    var watchedProcessesFoundRunning = Process.GetProcesses().Select(process => process.ProcessName).Intersect(watchedProcesses, StringComparer.CurrentCultureIgnoreCase).ToList();
+                    if (watchedProcessesFoundRunning.Any())
+                    {
+                        var capturingProcess = watchedProcessesFoundRunning.First();
+                        var processId = Process.GetProcesses().First(process => process.ProcessName.Equals(capturingProcess, StringComparison.CurrentCultureIgnoreCase)).Id;
+
+                        UpdateStatus($"Found process {capturingProcess} with id {processId}, starting capturing.");
+                        StartCapture(processId);
+                        return;
+                    }
+                }
+            }, TaskCreationOptions.LongRunning);
+            detectingWachedProcessesTask.Start();
+        }
 
         private void StartUpdatingPreviewTask()
         {
@@ -362,26 +431,25 @@ namespace AmbiDX
                     Buffer.BlockCopy(_ledData, 0, ledColors, 0, _ledData.Length * 4);
                     _ledDataLock.ExitReadLock();
 
-                    MethodInvoker updateLedUi = delegate
-                    {
-                        //var colors = new List<Color>();
-                        for (var i = ledColors.GetLength(0) - 1; i >= 0; i--)
-                        {
-                            var ledColor = Color.FromArgb(255, ledColors[i, 0], ledColors[i, 1], ledColors[i, 2]);
-                            //  colors.Add(ledColor);
-                            var col = Config.Leds[i][1];
-                            var row = Config.Leds[i][2];
-                            var label = Controls.Find($"0-{col}-{row}", false).First();
-                            label.BackColor = ledColor;
-                            label.ForeColor = Color.FromArgb(255, (byte)(ledColors[i, 0] + 128),
-                                (byte)(ledColors[i, 1] + 128), (byte)(ledColors[i, 2] + 128));
-                        }
-                        //Console.WriteLine(string.Join(", ", colors.Select(color => $"[{color.R},{color.G},{color.B}]")));
-                    };
-                    Invoke(updateLedUi);
+                    this.Invoke(preview => DrawPreviewLeds(preview, ledColors));
                 }
-            });
+            }, TaskCreationOptions.LongRunning);
             updateLedUiTask.Start();
+        }
+
+        private static void DrawPreviewLeds(Control ledContainer, int[,] colors)
+        {
+            for (var i = colors.GetLength(0) - 1; i >= 0; i--)
+            {
+                var ledColor = Color.FromArgb(255, colors[i, 0], colors[i, 1], colors[i, 2]);
+                var screen = Config.Leds[i][0];
+                var column = Config.Leds[i][1];
+                var row = Config.Leds[i][2];
+                var label = ledContainer.Controls.Find($"{screen}-{column}-{row}", false).First();
+                label.BackColor = ledColor;
+                label.ForeColor = Color.FromArgb(255, (byte)(colors[i, 0] + 128),
+                    (byte)(colors[i, 1] + 128), (byte)(colors[i, 2] + 128));
+            }
         }
 
         private void StartSerialCommunicationTask()
@@ -428,6 +496,12 @@ namespace AmbiDX
             _serialDataAvailable.Set();
             _ledDataAvailable.Set();
             _capture.Enabled = true;
+
+            _autoDetectProcesses.Checked = false;
+            lock (_capturingLock)
+            {
+                _capturing = false;
+            }
         }
 
         private void lightsOn_Click(object sender, EventArgs e)
@@ -459,6 +533,11 @@ namespace AmbiDX
             _cancel?.Cancel(false);
             Application.DoEvents();
             base.OnClosing(e);
+        }
+
+        private void UpdateStatus(string status)
+        {
+            _toolstrip.Invoke(toolStrip => _status.Text = status);
         }
     }
 }

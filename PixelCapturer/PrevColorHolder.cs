@@ -1,4 +1,5 @@
 ﻿using System;
+using PixelCapturer.LightsConfiguration;
 
 namespace PixelCapturer
 {
@@ -6,12 +7,12 @@ namespace PixelCapturer
     {
         public int[,] PrevColor { get; }
 
-        public PrevColorHolder()
+        public PrevColorHolder(LightConfiguration config)
         {
-            PrevColor = new int[Config.Leds.Length, 3];
+            PrevColor = new int[config.LedCount, 3];
             for (var i = 0; i < PrevColor.GetLength(0); i++)
             {
-                PrevColor[i, 0] = PrevColor[i, 1] = PrevColor[i, 2] = Config.MinBrightness / 3;
+                PrevColor[i, 0] = PrevColor[i, 1] = PrevColor[i, 2] = config.MinBrightness / 3;
             }
         }
 

@@ -6,6 +6,7 @@ using EasyHook;
 using PixelCapturer.DirectX;
 using PixelCapturer.DirectX.Detectors;
 using PixelCapturer.DirectX.Handlers;
+using PixelCapturer.LightsConfiguration;
 using PixelCapturer.Logging;
 
 namespace PixelCapturer
@@ -14,12 +15,11 @@ namespace PixelCapturer
     {
         private readonly CaptureClient _client;
         private ManualResetEvent _reset;
-        private readonly CaptureClientProxy _clientProxy;
         private IpcServerChannel _clientServerChannel;
 
         private static ILogger Logger => new Lazy<ILogger>(LoggerFactory.Create<InjectionEntry>).Value;
 
-        public InjectionEntry(RemoteHooking.IContext context, string channelName)
+        public InjectionEntry(RemoteHooking.IContext context, string channelName, LightConfiguration lightConfiguration)
         {
             SetupClientServerChannel(channelName);
 
@@ -27,21 +27,21 @@ namespace PixelCapturer
 
             LoggerFactory.Set(type => new TypeLoggerDecorator(type, _client));
 
-            _clientProxy = new CaptureClientProxy
+            var clientProxy = new CaptureClientProxy
             {
                 Disconnect = Disconnect
             };
-            _client.OnDisconnect += _clientProxy.OnDisconnect;
+            _client.OnDisconnect += clientProxy.OnDisconnect;
         }
 
-        public void Run(RemoteHooking.IContext context, string channelName)
+        public void Run(RemoteHooking.IContext context, string channelName, LightConfiguration lightConfiguration)
         {
             Logger.Log("Connected to target process with id {0}", RemoteHooking.GetCurrentProcessId());
 
             _reset = new ManualResetEvent(false);
 
-            var colorMapper = new ColorMapper(new PrevColorHolder(), new GammaCorrection());
-            var pixelCalculator = new PixelCalculator();
+            var colorMapper = new ColorMapper(new PrevColorHolder(lightConfiguration), new GammaCorrection(), lightConfiguration);
+            var pixelCalculator = new PixelCalculator(lightConfiguration);
 
             var directXLoader = new DirectXLoader(
                 new DirectXD3D9Detector(new D3D9PixelHandler(_client, colorMapper, pixelCalculator)),

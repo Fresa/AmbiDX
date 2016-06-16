@@ -86,7 +86,7 @@ namespace PixelCapturer.DirectX.Handlers
             if (_display == null || display.Height != _display.Height || display.Width != _display.Width)
             {
                 _display = display;
-                _pixelOffset = _pixelCalculator.Calculate(new[] { _display });
+                _pixelOffset = _pixelCalculator.Calculate(_display);
 
                 var textureDesc = new Texture2DDescription
                 {

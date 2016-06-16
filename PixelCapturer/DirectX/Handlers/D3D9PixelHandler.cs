@@ -50,7 +50,7 @@ namespace PixelCapturer.DirectX.Handlers
                         if (_display == null || display.Height != _display.Height || display.Width != _display.Width)
                         {
                             _display = display;
-                            _pixelOffset = _pixelCalculator.Calculate(new[] { _display });
+                            _pixelOffset = _pixelCalculator.Calculate(_display);
                             _offScreenSurface = Surface.CreateOffscreenPlain(device, display.Width, display.Height, renderTarget.Description.Format, Pool.SystemMemory);
                             _resolvedRenderTarget = Surface.CreateRenderTarget(device, display.Width, display.Height, renderTarget.Description.Format, MultisampleType.None, 0, false);
                         }

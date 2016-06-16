@@ -1,16 +1,24 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.Remoting;
 using System.Security.Principal;
 using System.Threading;
 using EasyHook;
+using PixelCapturer.LightsConfiguration;
 using SharpDX;
 
 namespace PixelCapturer
 {
     public class BackbufferCapturingProcess : ICapturingProcess
     {
+        private readonly LightConfiguration _lightConfiguration;
         private CaptureClient _client;
         private Action<int[,]> _onCapturing = rectangle => { };
+
+        public BackbufferCapturingProcess(LightConfiguration lightConfiguration)
+        {
+            _lightConfiguration = lightConfiguration;
+        }
 
         public void Start(int processId)
         {
@@ -27,7 +35,8 @@ namespace PixelCapturer
                 processId,
                 typeof(CaptureClient).Assembly.Location,
                 typeof(CaptureClient).Assembly.Location,
-                channelName);
+                channelName,
+                _lightConfiguration);
         }
 
         public void Stop()
@@ -38,7 +47,6 @@ namespace PixelCapturer
             }
             catch
             {
-                // client has disconnected
             }
         }
 

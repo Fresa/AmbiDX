@@ -81,9 +81,20 @@
     <Compile Include="ProcessListItem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Settings\ProcessCollection.cs" />
-    <Compile Include="Settings\ProcessElement.cs" />
-    <Compile Include="Settings\ProcessSection.cs" />
+    <Compile Include="Settings\Lights\DisplayCollection.cs" />
+    <Compile Include="Settings\Lights\DisplayElement.cs" />
+    <Compile Include="Settings\Lights\LedCollection.cs" />
+    <Compile Include="Settings\Lights\LedElement.cs" />
+    <Compile Include="Settings\Lights\LightsConfig.cs" />
+    <Compile Include="Settings\Lights\LightsSection.cs" />
+    <Compile Include="Settings\Preview\PreviewConfig.cs" />
+    <Compile Include="Settings\Preview\PreviewSection.cs" />
+    <Compile Include="Settings\Process\ProcessCollection.cs" />
+    <Compile Include="Settings\Process\ProcessElement.cs" />
+    <Compile Include="Settings\Process\ProcessSection.cs" />
+    <Compile Include="Settings\Process\ProcessSettingsHandler.cs" />
+    <Compile Include="Settings\SerialCommunication\SerialCommunicationConfig.cs" />
+    <Compile Include="Settings\SerialCommunication\SerialCommunicationSection.cs" />
     <EmbeddedResource Include="Preview.resx">
       <DependentUpon>Preview.cs</DependentUpon>
     </EmbeddedResource>
@@ -117,6 +128,7 @@
       <Name>PixelCapturer</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

@@ -1,7 +1,7 @@
 ﻿using System;
-using System.IO;
 using System.IO.Ports;
-using PixelCapturer;
+using AmbiDX.Settings.Lights;
+using AmbiDX.Settings.SerialCommunication;
 
 namespace AmbiDX
 {
@@ -12,7 +12,7 @@ namespace AmbiDX
 
         public AdaLedSerialWriter()
         {
-            _serialPort = new SerialPort(Config.SerialPort.ToString().ToUpper(), Config.SerialBaud)
+            _serialPort = new SerialPort(SerialCommunicationConfig.Get().Port.ToString().ToUpper(), SerialCommunicationConfig.Get().Baud)
             {
                 WriteTimeout = 500
             };
@@ -30,14 +30,11 @@ namespace AmbiDX
         private static byte[] CreateHeader()
         {
             var serialData = new byte[6];
-            // A special header / magic word is expected by the corresponding LED
-            // streaming code running on the Arduino.  This only needs to be initialized
-            // once (not in draw() loop) because the number of LEDs remains constant:
-            serialData[0] = (byte)'A';  // Magic word
+            serialData[0] = (byte)'A'; 
             serialData[1] = (byte)'d';
             serialData[2] = (byte)'a';
-            serialData[3] = (byte)((Config.Leds.Length - 1) >> 8);   // LED count high byte
-            serialData[4] = (byte)((Config.Leds.Length - 1) & 0xff); // LED count low byte
+            serialData[3] = (byte)((LightsConfig.LedCount - 1) >> 8);   // LED count high byte
+            serialData[4] = (byte)((LightsConfig.LedCount - 1) & 0xff); // LED count low byte
             serialData[5] = (byte)(serialData[3] ^ serialData[4] ^ 0x55); // Checksum
 
             return serialData;

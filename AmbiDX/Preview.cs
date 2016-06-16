@@ -8,7 +8,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using AmbiDX.Settings;
+using AmbiDX.Settings.Lights;
+using AmbiDX.Settings.Preview;
+using AmbiDX.Settings.Process;
+using AmbiDX.Settings.SerialCommunication;
 using PixelCapturer;
 using Font = System.Drawing.Font;
 using Process = System.Diagnostics.Process;
@@ -29,7 +32,7 @@ namespace AmbiDX
         private readonly Button _addToWatcher;
         private readonly Button _removeFromWatcher;
         private readonly ListBox _watcher;
-        private CheckBox _autoDetectProcesses;
+        private readonly CheckBox _autoDetectProcesses;
 
         private AutoResetEvent _serialDataAvailable;
 
@@ -40,15 +43,15 @@ namespace AmbiDX
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
             BackColor = Color.Black;
 
-            const short width = Config.PixelSize;
-            const short height = Config.PixelSize;
+            var width = PreviewConfig.Get().PixelSize;
+            var height = PreviewConfig.Get().PixelSize;
             const int topOffset = 100;
 
             var font = new Font(new FontFamily(GenericFontFamilies.SansSerif), (int)Math.Ceiling((double)height / 6));
 
             InitializeComponent();
 
-            _darkLeds = Enumerable.Repeat((byte)0, Config.Leds.GetLength(0) * 3).ToArray();
+            _darkLeds = Enumerable.Repeat((byte)0, LightsConfig.LedCount * 3).ToArray();
 
             _lightsOn = new Button
             {
@@ -136,51 +139,45 @@ namespace AmbiDX
                 Renderer = new ToolStripProfessionalRenderer { RoundedEdges = false },
                 AutoSize = false,
                 Width = Width,
-                Top = height * Config.Leds.Max(ints => ints[2]) + topOffset + height
+                Top = height * LightsConfig.Get().Displays.Max(display => display.Leds.Max(led => led.Row)) + topOffset + height
             };
             Controls.Add(_toolstrip);
 
-            var ledLayouts = Config.Leds
-                .GroupBy(ledConfig => ledConfig[0])
-                .Select(screen => new
-                {
-                    Screen = screen.Key,
-                    Columns = screen.Min(ints => ints[2]),
-                    Rows = screen.Min(ints => ints[1])
-                })
-                .ToList();
-
-            ledLayouts.ForEach(ledLayout =>
+            var screenLeft = 0;
+            const int screenTop = topOffset;
+            foreach (var item in LightsConfig.Get().Displays.Select((display, index) => new { Index = index, Display = display }))
             {
                 var screenLabel = new Label
                 {
-                    Text = $"Screen {ledLayout.Screen}",
-                    Left = width * ledLayout.Columns,
+                    Text = $"Screen {item.Index}",
+                    Left = screenLeft,
                     ForeColor = Color.White
                 };
-
                 Controls.Add(screenLabel);
-                screenLabel.Top = height * ledLayout.Rows + topOffset - screenLabel.Height;
-            });
+                screenLabel.Top = screenTop - screenLabel.Height;
 
-            foreach (var led in Config.Leds)
-            {
-                var screen = led[0];
-                var left = width * led[1];
-                var top = height * led[2] + topOffset;
-                Controls.Add(new Label
+                foreach (var led in item.Display.Leds)
                 {
-                    Name = $"{screen}-{led[1]}-{led[2]}",
-                    Text = $"{led[1]},{led[2]}",
-                    Font = font,
-                    Width = width,
-                    Height = height,
-                    Left = left,
-                    Top = top,
-                    ForeColor = Color.White
-                });
-            }
+                    var screen = item.Index;
+                    var left = screenLeft + width * led.Column;
+                    var top = screenTop + height * led.Row;
 
+                    Controls.Add(new Label
+                    {
+                        Name = $"{screen}-{led.Column}-{led.Row}",
+                        Text = $"{led.Column},{led.Row}",
+                        Font = font,
+                        Width = width,
+                        Height = height,
+                        Left = left,
+                        Top = top,
+                        ForeColor = Color.White
+                    });
+
+                }
+                screenLeft += item.Display.Columns * width;
+            }
+            
             _cancel = new CancellationTokenSource();
 
             if (_autoDetectProcesses.Checked)
@@ -307,12 +304,12 @@ namespace AmbiDX
             if (processId == -1)
             {
                 UpdateStatus(@"Starting capturing front buffer");
-                _screenCapturingProcesses = Config.Displays.Select(displayConfig => new FrontbufferCapturer(displayConfig[0])).ToList();
+                _screenCapturingProcesses = LightsConfig.Get().Displays.Select((display, displayIndex) => new FrontbufferCapturer(displayIndex, LightsConfig.ToLightConfiguration())).ToList();
             }
             else
             {
                 UpdateStatus($"Starting capturing back buffer from process with id {processId}");
-                _screenCapturingProcesses = new[] { new BackbufferCapturingProcess() };
+                _screenCapturingProcesses = new[] { new BackbufferCapturingProcess(LightsConfig.ToLightConfiguration()) };
             }
 
             _stop.Invoke(stop => stop.Enabled = true);
@@ -439,13 +436,16 @@ namespace AmbiDX
 
         private static void DrawPreviewLeds(Control ledContainer, int[,] colors)
         {
+            var leds =
+                LightsConfig.Get()
+                    .Displays.SelectMany(
+                        (display, i) =>
+                            display.Leds.Select(led => new {Screen = i, led.Column, led.Row})).ToArray();
+
             for (var i = colors.GetLength(0) - 1; i >= 0; i--)
             {
                 var ledColor = Color.FromArgb(255, colors[i, 0], colors[i, 1], colors[i, 2]);
-                var screen = Config.Leds[i][0];
-                var column = Config.Leds[i][1];
-                var row = Config.Leds[i][2];
-                var label = ledContainer.Controls.Find($"{screen}-{column}-{row}", false).First();
+                var label = ledContainer.Controls.Find($"{leds[i].Screen}-{leds[i].Column}-{leds[i].Row}", false).First();
                 label.BackColor = ledColor;
                 label.ForeColor = Color.FromArgb(255, (byte)(colors[i, 0] + 128),
                     (byte)(colors[i, 1] + 128), (byte)(colors[i, 2] + 128));
@@ -457,7 +457,7 @@ namespace AmbiDX
             var serialCommuncationTask = new Task(() =>
             {
                 ISerialWriter serialWriter;
-                if (Config.EnableSerialCommunication)
+                if (SerialCommunicationConfig.Get().Enabled)
                 {
                     serialWriter = new AdaLedSerialWriter();
                 }
@@ -509,8 +509,8 @@ namespace AmbiDX
             _lightsOn.Enabled = false;
             var serialWriter = new AdaLedSerialWriter();
             var random = new Random();
-            var colors = new byte[Config.Leds.GetLength(0) * 3];
-            for (var i = 0; i < Config.Leds.GetLength(0) * 3; i++)
+            var colors = new byte[LightsConfig.LedCount * 3];
+            for (var i = 0; i < LightsConfig.LedCount * 3; i++)
             {
                 colors[i] = (byte)random.Next(0, 255);
             }

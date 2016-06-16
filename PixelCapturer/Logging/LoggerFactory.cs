@@ -4,7 +4,7 @@ namespace PixelCapturer.Logging
 {
     public class LoggerFactory
     {
-        private static Func<Type, ILogger> _factory = type => new DefaultLogger();
+        private static Func<Type, ILogger> _factory = type => new ConsoleLogger();
         
         public static ILogger Create<TClass>()
         {

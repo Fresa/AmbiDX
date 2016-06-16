@@ -78,7 +78,6 @@
     <Compile Include="CaptureClient.cs" />
     <Compile Include="CaptureClientProxy.cs" />
     <Compile Include="ColorMapper.cs" />
-    <Compile Include="Config.cs" />
     <Compile Include="Coordinate.cs" />
     <Compile Include="DirectX\Detectors\DirectXD3D11Detector.cs" />
     <Compile Include="DirectX\Detectors\DirectXD3D9Detector.cs" />
@@ -99,7 +98,10 @@
     <Compile Include="ICapturingProcess.cs" />
     <Compile Include="InjectionEntry.cs" />
     <Compile Include="Hook.cs" />
-    <Compile Include="Logging\DefaultLogger.cs" />
+    <Compile Include="LightsConfiguration\DisplayConfig.cs" />
+    <Compile Include="LightsConfiguration\LedConfig.cs" />
+    <Compile Include="LightsConfiguration\LightConfiguration.cs" />
+    <Compile Include="Logging\ConsoleLogger.cs" />
     <Compile Include="Logging\ILogger.cs" />
     <Compile Include="Logging\LoggerFactory.cs" />
     <Compile Include="Logging\TypeLoggerDecorator.cs" />

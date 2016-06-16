@@ -1,6 +1,6 @@
 using System.Configuration;
 
-namespace AmbiDX.Settings
+namespace AmbiDX.Settings.Process
 {
     public class ProcessSection : ConfigurationSection
     {

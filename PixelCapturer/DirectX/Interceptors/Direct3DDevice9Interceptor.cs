@@ -10,12 +10,34 @@ namespace PixelCapturer.DirectX.Interceptors
 {
     public class Direct3DDevice9Interceptor : IDirectXInterceptor
     {
+        private readonly ILogger _logger = LoggerFactory.Create<Direct3DDevice9Interceptor>();
+
         [UnmanagedFunctionPointer(CallingConvention.StdCall, CharSet = CharSet.Unicode, SetLastError = true)]
         delegate int EndSceneDelegate(IntPtr device);
-
         private Action<Device> _endSceneDelegate = device => { };
         private readonly Hook<EndSceneDelegate> _endSceneHook;
-        private readonly ILogger _logger;
+        
+        public Direct3DDevice9Interceptor()
+        {
+            Dictionary<Direct3DDevice9FunctionOrdinals, IntPtr> direct3DDevice9Addresses = null;
+            using (var d3D = new Direct3D())
+            {
+                using (var renderForm = new Form())
+                {
+                    using (var device = new Device(d3D, 0, DeviceType.NullReference, IntPtr.Zero, CreateFlags.HardwareVertexProcessing, new PresentParameters() { BackBufferWidth = 1, BackBufferHeight = 1, DeviceWindowHandle = renderForm.Handle }))
+                    {
+                        var vTable = Marshal.ReadIntPtr(device.NativePointer);
+                        direct3DDevice9Addresses = Enum
+                            .GetValues(typeof(Direct3DDevice9FunctionOrdinals))
+                            .Cast<short>()
+                            .ToDictionary(index => (Direct3DDevice9FunctionOrdinals)index,
+                                index => Marshal.ReadIntPtr(vTable, index * IntPtr.Size));
+                    }
+                }
+            }
+
+            _endSceneHook = new Hook<EndSceneDelegate>(direct3DDevice9Addresses[Direct3DDevice9FunctionOrdinals.EndScene], new EndSceneDelegate(EndSceneHook), this);
+        }
 
         private int EndSceneHook(IntPtr devicePtr)
         {
@@ -36,28 +58,6 @@ namespace PixelCapturer.DirectX.Interceptors
             _endSceneDelegate = ev;
         }
 
-        public Direct3DDevice9Interceptor(ILogger logger)
-        {
-            _logger = logger;
-            Dictionary<Direct3DDevice9FunctionOrdinals, IntPtr> direct3DDevice9Addresses = null;
-            using (var d3D = new Direct3D())
-            {
-                using (var renderForm = new Form())
-                {
-                    using (var device = new Device(d3D, 0, DeviceType.NullReference, IntPtr.Zero, CreateFlags.HardwareVertexProcessing, new PresentParameters() { BackBufferWidth = 1, BackBufferHeight = 1, DeviceWindowHandle = renderForm.Handle }))
-                    {
-                        var vTable = Marshal.ReadIntPtr(device.NativePointer);
-                        direct3DDevice9Addresses = Enum
-                            .GetValues(typeof(Direct3DDevice9FunctionOrdinals))
-                            .Cast<short>()
-                            .ToDictionary(index => (Direct3DDevice9FunctionOrdinals)index,
-                                index => Marshal.ReadIntPtr(vTable, index * IntPtr.Size));
-                    }
-                }
-            }
-
-            _endSceneHook = new Hook<EndSceneDelegate>(direct3DDevice9Addresses[Direct3DDevice9FunctionOrdinals.EndScene], new EndSceneDelegate(EndSceneHook), this);
-        }
         
         public void Dispose()
         {

@@ -45,7 +45,11 @@ namespace PixelCapturer
 
             var directXLoader = new DirectXLoader(
                 new DirectXD3D9Detector(new D3D9PixelHandler(_client, colorMapper, pixelCalculator)),
-                new DirectXD3D11Detector(new D3D11PixelHandler(_client, colorMapper, pixelCalculator)));
+                new DirectXD3D10Detector(),
+                new DirectXD3D10Dot1Detector(),
+                new DirectXD3D11Detector(new D3D11PixelHandler(_client, colorMapper, pixelCalculator)),
+                new DirectXD3D11Dot1Detector(),
+                new DirectXD3D12Detector());
 
             var directXInterceptors = directXLoader.Load();
 

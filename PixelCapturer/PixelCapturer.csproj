@@ -54,6 +54,10 @@
       <HintPath>..\packages\SharpDX.Direct3D11.3.0.2\lib\net45\SharpDX.Direct3D11.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="SharpDX.Direct3D12, Version=3.0.2.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.Direct3D12.3.0.2\lib\net45\SharpDX.Direct3D12.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="SharpDX.Direct3D9, Version=3.0.2.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
       <HintPath>..\packages\SharpDX.Direct3D9.3.0.2\lib\net45\SharpDX.Direct3D9.dll</HintPath>
       <Private>True</Private>
@@ -63,6 +67,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Remoting" />
@@ -75,15 +80,23 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppConfiguration.cs" />
     <Compile Include="CaptureClient.cs" />
     <Compile Include="CaptureClientProxy.cs" />
     <Compile Include="ColorMapper.cs" />
     <Compile Include="Coordinate.cs" />
+    <Compile Include="DirectX\Detectors\DirectXD3D10Detector.cs" />
+    <Compile Include="DirectX\Detectors\DirectXD3D10Dot1Detector.cs" />
     <Compile Include="DirectX\Detectors\DirectXD3D11Detector.cs" />
+    <Compile Include="DirectX\Detectors\DirectXD3D11Dot1Detector.cs" />
+    <Compile Include="DirectX\Detectors\DirectXD3D12Detector.cs" />
     <Compile Include="DirectX\Detectors\DirectXD3D9Detector.cs" />
+    <Compile Include="DirectX\Detectors\DirectXDetector.cs" />
     <Compile Include="DirectX\Detectors\IDirectXDetector.cs" />
     <Compile Include="DirectX\DirectXLoader.cs" />
+    <Compile Include="DirectX\Interceptors\Direct3DDevice10Interceptor.cs" />
     <Compile Include="DirectX\Interceptors\Direct3DDevice11Interceptor.cs" />
+    <Compile Include="DirectX\Interceptors\Direct3DDevice12Interceptor.cs" />
     <Compile Include="DirectX\Interceptors\Direct3DDevice9FunctionOrdinals.cs" />
     <Compile Include="DirectX\Interceptors\Direct3DDevice9Interceptor.cs" />
     <Compile Include="DirectX\Handlers\D3D11PixelHandler.cs" />

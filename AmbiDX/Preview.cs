@@ -33,11 +33,15 @@ namespace AmbiDX
         private readonly Button _removeFromWatcher;
         private readonly ListBox _watcher;
         private readonly CheckBox _autoDetectProcesses;
+        private NotifyIcon _notifyIcon;
 
         private AutoResetEvent _serialDataAvailable;
 
         public Preview()
         {
+            InitializeComponent();
+            components = new Container();
+
             StartPosition = FormStartPosition.Manual;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -48,8 +52,6 @@ namespace AmbiDX
             const int topOffset = 100;
 
             var font = new Font(new FontFamily(GenericFontFamilies.SansSerif), (int)Math.Ceiling((double)height / 6));
-
-            InitializeComponent();
 
             _darkLeds = Enumerable.Repeat((byte)0, LightsConfig.LedCount * 3).ToArray();
 
@@ -143,6 +145,16 @@ namespace AmbiDX
             };
             Controls.Add(_toolstrip);
 
+            _notifyIcon = new NotifyIcon(components)
+            {
+                BalloonTipTitle = @"AmbiDX",
+                Icon = new Icon("ambidx.ico"),
+                Visible = true
+            };
+            _notifyIcon.DoubleClick += ToggleMinimizeState;
+            _notifyIcon.ContextMenu = new ContextMenu(new[] { new MenuItem("Exit", (sender, args) => Application.Exit()) });
+            Resize += SetMinimizeState;
+
             var screenLeft = 0;
             const int screenTop = topOffset;
             foreach (var item in LightsConfig.Get().Displays.Select((display, index) => new { Index = index, Display = display }))
@@ -177,12 +189,28 @@ namespace AmbiDX
                 }
                 screenLeft += item.Display.Columns * width;
             }
-            
+
             _cancel = new CancellationTokenSource();
 
             if (_autoDetectProcesses.Checked)
             {
                 StartDetectingWatchedProcesses();
+            }
+        }
+
+        private void ToggleMinimizeState(object sender, EventArgs e)
+        {
+            WindowState = WindowState == FormWindowState.Minimized ? FormWindowState.Normal : FormWindowState.Minimized;
+        }
+
+        private void SetMinimizeState(object sender, EventArgs e)
+        {
+            var isMinimized = WindowState == FormWindowState.Minimized;
+
+            ShowInTaskbar = !isMinimized;
+            if (isMinimized)
+            {
+                _notifyIcon.ShowBalloonTip(500, "AmbiDX", "...is still running in the background", ToolTipIcon.Info);
             }
         }
 
@@ -440,7 +468,7 @@ namespace AmbiDX
                 LightsConfig.Get()
                     .Displays.SelectMany(
                         (display, i) =>
-                            display.Leds.Select(led => new {Screen = i, led.Column, led.Row})).ToArray();
+                            display.Leds.Select(led => new { Screen = i, led.Column, led.Row })).ToArray();
 
             for (var i = colors.GetLength(0) - 1; i >= 0; i--)
             {
@@ -528,11 +556,18 @@ namespace AmbiDX
             _lightsOn.Enabled = true;
         }
 
-        protected override void OnClosing(CancelEventArgs e)
+        protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                WindowState = FormWindowState.Minimized;
+                return;
+            }
+
             _cancel?.Cancel(false);
             Application.DoEvents();
-            base.OnClosing(e);
+            OnClosing(e);
         }
 
         private void UpdateStatus(string status)

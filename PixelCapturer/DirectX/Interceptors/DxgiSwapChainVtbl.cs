@@ -1,6 +1,6 @@
 ﻿namespace PixelCapturer.DirectX.Interceptors
 {
-    public enum DxgiSwapChainFunctionOrdinals : short
+    public enum DxgiSwapChainVtbl : short
     {
         // IUnknown
         QueryInterface = 0,

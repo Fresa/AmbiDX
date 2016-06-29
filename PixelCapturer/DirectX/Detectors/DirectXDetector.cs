@@ -20,11 +20,11 @@ namespace PixelCapturer.DirectX.Detectors
         {
             if (NativeMethods.GetModuleHandle(_directXDllFileName) != IntPtr.Zero)
             {
-                _logger.Log($"Intercepting {_directXDllFileName}");
+                _logger.Log($"Found {_directXDllFileName}.");
                 directXInterceptor = DirectXInterceptorFactory();
                 return true;
             }
-            _logger.Log($"{_directXDllFileName} not found");
+            _logger.Log($"{_directXDllFileName} not found.");
             directXInterceptor = null;
             return false;
         }

@@ -19,7 +19,7 @@ namespace PixelCapturer.DirectX.Interceptors
         
         public Direct3DDevice9Interceptor()
         {
-            Dictionary<Direct3DDevice9FunctionOrdinals, IntPtr> direct3DDevice9Addresses = null;
+            Dictionary<D3D9DeviceVtbl, IntPtr> direct3DDevice9Addresses = null;
             using (var d3D = new Direct3D())
             {
                 using (var renderForm = new Form())
@@ -28,15 +28,15 @@ namespace PixelCapturer.DirectX.Interceptors
                     {
                         var vTable = Marshal.ReadIntPtr(device.NativePointer);
                         direct3DDevice9Addresses = Enum
-                            .GetValues(typeof(Direct3DDevice9FunctionOrdinals))
+                            .GetValues(typeof(D3D9DeviceVtbl))
                             .Cast<short>()
-                            .ToDictionary(index => (Direct3DDevice9FunctionOrdinals)index,
+                            .ToDictionary(index => (D3D9DeviceVtbl)index,
                                 index => Marshal.ReadIntPtr(vTable, index * IntPtr.Size));
                     }
                 }
             }
 
-            _endSceneHook = new Hook<EndSceneDelegate>(direct3DDevice9Addresses[Direct3DDevice9FunctionOrdinals.EndScene], new EndSceneDelegate(EndSceneHook), this);
+            _endSceneHook = new Hook<EndSceneDelegate>(direct3DDevice9Addresses[D3D9DeviceVtbl.EndScene], new EndSceneDelegate(EndSceneHook), this);
         }
 
         private int EndSceneHook(IntPtr devicePtr)

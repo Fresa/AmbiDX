@@ -1,6 +1,6 @@
 namespace PixelCapturer.DirectX.Interceptors
 {
-    public enum Direct3DDevice9FunctionOrdinals : short
+    public enum D3D9DeviceVtbl : short
     {
         QueryInterface = 0,
         AddRef = 1,

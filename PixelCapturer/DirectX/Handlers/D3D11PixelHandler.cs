@@ -1,4 +1,4 @@
-using PixelCapturer.Logging;
+using System.Threading;
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
@@ -13,47 +13,60 @@ namespace PixelCapturer.DirectX.Handlers
         private readonly CaptureClient _client;
         private readonly ColorMapper _colorMapper;
         private readonly PixelCalculator _pixelCalculator;
-        private readonly ILogger _logger = LoggerFactory.Create<D3D11PixelHandler>();
         private Display _display;
         private Coordinate[,] _pixelOffset;
         private Device _device;
         private Texture2D _screenTexture;
+        private readonly object _disposedLock = new object();
 
         public D3D11PixelHandler(CaptureClient client, ColorMapper colorMapper, PixelCalculator pixelCalculator)
         {
             _client = client;
             _colorMapper = colorMapper;
-            _pixelCalculator = pixelCalculator;           
+            _pixelCalculator = pixelCalculator;
         }
 
         public void PresentDelegate(SwapChain swapChain)
         {
-            using (var backBuffer = swapChain.GetBackBuffer<Texture2D>(0))
+            if (Monitor.TryEnter(_disposedLock) == false)
             {
-                var display = new Display
-                {
-                    Height = backBuffer.Description.Height,
-                    Width = backBuffer.Description.Width
-                };
-
-                CreateResources(display);
-
-                _device.ImmediateContext.CopyResource(backBuffer, _screenTexture);
+                return;
             }
 
-            DataStream dataStream;
-
-            var mapSource = _device.ImmediateContext.MapSubresource(_screenTexture, 0, MapMode.Read, SharpDX.Direct3D11.MapFlags.None, out dataStream);
-            var dataRectangle = new DataRectangle
+            try
             {
-                DataPointer = mapSource.DataPointer,
-                Pitch = mapSource.RowPitch
-            };
+                using (var backBuffer = swapChain.GetBackBuffer<Texture2D>(0))
+                {
+                    var display = new Display
+                    {
+                        Height = backBuffer.Description.Height,
+                        Width = backBuffer.Description.Width
+                    };
 
-            var pixelData = _colorMapper.Map(dataStream, dataRectangle, _pixelOffset);
-            _device.ImmediateContext.UnmapSubresource(_screenTexture, 0);
+                    CreateResources(display);
 
-            _client.StreamData(pixelData);
+                    _device.ImmediateContext.CopyResource(backBuffer, _screenTexture);
+                }
+
+                DataStream dataStream;
+
+                var mapSource = _device.ImmediateContext.MapSubresource(_screenTexture, 0, MapMode.Read,
+                    SharpDX.Direct3D11.MapFlags.None, out dataStream);
+                var dataRectangle = new DataRectangle
+                {
+                    DataPointer = mapSource.DataPointer,
+                    Pitch = mapSource.RowPitch
+                };
+
+                var pixelData = _colorMapper.Map(dataStream, dataRectangle, _pixelOffset);
+                _device.ImmediateContext.UnmapSubresource(_screenTexture, 0);
+
+                _client.StreamData(pixelData);
+            }
+            finally
+            {
+                Monitor.Exit(_disposedLock);
+            }
         }
 
         private void CreateResources(Display display)
@@ -107,7 +120,7 @@ namespace PixelCapturer.DirectX.Handlers
 
         public void Dispose()
         {
-            // Todo: handle this more graceful (multi-threading)
+            Monitor.Enter(_disposedLock);
             _display = null;
             _device?.Dispose();
             _screenTexture?.Dispose();

@@ -7,7 +7,6 @@ using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using SharpDX.Windows;
-using Device = SharpDX.DXGI.Device;
 
 namespace PixelCapturer.DirectX.Interceptors
 {
@@ -43,7 +42,7 @@ namespace PixelCapturer.DirectX.Interceptors
 
         public Direct3DDevice11Interceptor()
         {
-            Dictionary<DxgiSwapChainFunctionOrdinals, IntPtr> dxgiSwapChainAddresses;
+            Dictionary<DxgiSwapChainVtbl, IntPtr> dxgiSwapChainAddresses;
             using (var renderForm = new RenderForm())
             {
                 SharpDX.Direct3D11.Device device;
@@ -71,14 +70,14 @@ namespace PixelCapturer.DirectX.Interceptors
                 {
                     var vTable = Marshal.ReadIntPtr(swapChain.NativePointer);
                     dxgiSwapChainAddresses = Enum
-                        .GetValues(typeof(DxgiSwapChainFunctionOrdinals))
+                        .GetValues(typeof(DxgiSwapChainVtbl))
                         .Cast<short>()
-                        .ToDictionary(index => (DxgiSwapChainFunctionOrdinals)index,
+                        .ToDictionary(index => (DxgiSwapChainVtbl)index,
                             index => Marshal.ReadIntPtr(vTable, index * IntPtr.Size));
                 }
             }
 
-            _presentHook = new Hook<PresentDelegate>(dxgiSwapChainAddresses[DxgiSwapChainFunctionOrdinals.Present], new PresentDelegate(PresentHook), this);
+            _presentHook = new Hook<PresentDelegate>(dxgiSwapChainAddresses[DxgiSwapChainVtbl.Present], new PresentDelegate(PresentHook), this);
         }
 
         public void Dispose()

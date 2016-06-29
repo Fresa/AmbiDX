@@ -36,7 +36,7 @@ namespace PixelCapturer
 
         public void Run(RemoteHooking.IContext context, string channelName, LightConfiguration lightConfiguration)
         {
-            Logger.Log("Connected to target process with id {0}", RemoteHooking.GetCurrentProcessId());
+            Logger.Log($"Connected to target process with id {RemoteHooking.GetCurrentProcessId()}");
 
             _reset = new ManualResetEvent(false);
 
@@ -48,7 +48,6 @@ namespace PixelCapturer
                 new DirectXD3D10Detector(),
                 new DirectXD3D10Dot1Detector(),
                 new DirectXD3D11Detector(new D3D11PixelHandler(_client, colorMapper, pixelCalculator)),
-                new DirectXD3D11Dot1Detector(),
                 new DirectXD3D12Detector());
 
             var directXInterceptors = directXLoader.Load();

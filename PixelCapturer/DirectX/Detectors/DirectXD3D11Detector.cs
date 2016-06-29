@@ -1,36 +1,26 @@
-using System;
 using PixelCapturer.DirectX.Handlers;
 using PixelCapturer.DirectX.Interceptors;
-using PixelCapturer.Logging;
 
 namespace PixelCapturer.DirectX.Detectors
 {
-    public class DirectXD3D11Detector : IDirectXDetector
+    public class DirectXD3D11Detector : DirectXDetector
     {
         private readonly IDirect3DDevice11Handler _handler;
-        private readonly ILogger _logger = LoggerFactory.Create<DirectXD3D11Detector>();
+        private const string DirectXDllFileName = "d3d11.dll";
 
-        public DirectXD3D11Detector(IDirect3DDevice11Handler handler)
+        public DirectXD3D11Detector(IDirect3DDevice11Handler handler) : base(DirectXDllFileName)
         {
             _handler = handler;
         }
 
-        public bool TryDetect(out IDirectXInterceptor directXInterceptor)
+        protected override IDirectXInterceptor DirectXInterceptorFactory()
         {
-            if (NativeMethods.GetModuleHandle("d3d11.dll") != IntPtr.Zero)
-            {
-                _logger.Log("Intercepting d3d11.dll");
-                var interceptor = new Direct3DDevice11Interceptor();
-                interceptor.OnPresent(_handler.PresentDelegate);
-                directXInterceptor = interceptor;
-                return true;
-            }
-            _logger.Log("d3d11.dll not found");
-            directXInterceptor = null;
-            return false;
+            var interceptor = new Direct3DDevice11Interceptor();
+            interceptor.OnPresent(_handler.PresentDelegate);
+            return interceptor;
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             _handler.Dispose();
         }

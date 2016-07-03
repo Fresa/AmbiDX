@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Text;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,13 @@ using AmbiDX.Settings.Preview;
 using AmbiDX.Settings.Process;
 using AmbiDX.Settings.SerialCommunication;
 using PixelCapturer;
+using PixelCapturer.LightsConfiguration;
+using SharpDX;
+using SharpDX.Direct3D;
+using SharpDX.Direct3D12;
+using SharpDX.DXGI;
+using SharpDX.Windows;
+using Device = SharpDX.Direct3D12.Device;
 using Font = System.Drawing.Font;
 using Process = System.Diagnostics.Process;
 
@@ -196,6 +204,8 @@ namespace AmbiDX
             {
                 StartDetectingWatchedProcesses();
             }
+
+            //Test();
         }
 
         private void ToggleMinimizeState(object sender, EventArgs e)
@@ -407,6 +417,10 @@ namespace AmbiDX
 
         private bool _capturing;
         private readonly object _capturingLock = new object();
+        private CommandQueue _commandQueue;
+        private Fence _fence;
+        private int _fenceValue;
+        private AutoResetEvent _fenceEvent;
 
         private void StartDetectingWatchedProcesses()
         {
@@ -521,8 +535,8 @@ namespace AmbiDX
             {
                 screenCapturingProcess.Stop();
             }
-            _serialDataAvailable.Set();
-            _ledDataAvailable.Set();
+            _serialDataAvailable?.Set();
+            _ledDataAvailable?.Set();
             _capture.Enabled = true;
 
             _autoDetectProcesses.Checked = false;
@@ -573,6 +587,213 @@ namespace AmbiDX
         private void UpdateStatus(string status)
         {
             _toolstrip.Invoke(toolStrip => _status.Text = status);
+        }
+
+        private SwapChain3 LoadPipeline()
+        {
+            var form = new RenderForm();
+            int width = form.ClientSize.Width;
+            int height = form.ClientSize.Height;
+
+
+            var device = new Device(null, SharpDX.Direct3D.FeatureLevel.Level_12_0);
+            SwapChain3 swapChain;
+            using (var factory = new Factory4())
+            {
+                // Describe and create the command queue.
+                var queueDesc = new CommandQueueDescription(CommandListType.Direct);
+                var commandQueue = device.CreateCommandQueue(queueDesc);
+
+
+                // Describe and create the swap chain.
+                var swapChainDesc = new SwapChainDescription()
+                {
+                    BufferCount = 2,
+                    ModeDescription = new ModeDescription(width, height, new Rational(60, 1), Format.R8G8B8A8_UNorm),
+                    Usage = Usage.RenderTargetOutput,
+                    SwapEffect = SwapEffect.FlipDiscard,
+                    OutputHandle = form.Handle,
+                    //Flags = SwapChainFlags.None,
+                    SampleDescription = new SampleDescription(1, 0),
+                    IsWindowed = true
+                };
+
+                var tempSwapChain = new SwapChain(factory, commandQueue, swapChainDesc);
+                swapChain = tempSwapChain.QueryInterface<SwapChain3>();
+                tempSwapChain.Dispose();
+            }
+
+            // Create descriptor heaps.
+            // Describe and create a render target view (RTV) descriptor heap.
+            var rtvHeapDesc = new DescriptorHeapDescription()
+            {
+                DescriptorCount = 2,
+                Flags = DescriptorHeapFlags.None,
+                Type = DescriptorHeapType.RenderTargetView
+            };
+
+            var renderTargetViewHeap = device.CreateDescriptorHeap(rtvHeapDesc);
+
+            var srvHeapDesc = new DescriptorHeapDescription()
+            {
+                DescriptorCount = 1,
+                Flags = DescriptorHeapFlags.ShaderVisible,
+                Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView
+            };
+
+            var shaderRenderViewHeap = device.CreateDescriptorHeap(srvHeapDesc);
+
+            var rtvDescriptorSize = device.GetDescriptorHandleIncrementSize(DescriptorHeapType.RenderTargetView);
+
+            var resource = device.CreateCommittedResource(new HeapProperties(HeapType.Default)
+            {
+                CPUPageProperty = CpuPageProperty.Unknown,
+                MemoryPoolPreference = MemoryPool.Unknown,
+                CreationNodeMask = 1,
+                VisibleNodeMask = 1
+            }, HeapFlags.None,
+                ResourceDescription.Texture2D(Format.B8G8R8A8_UNorm, 100, 100),
+                ResourceStates.CopyDestination,
+                null);
+
+            // Create frame resources.
+            var rtvHandle = renderTargetViewHeap.CPUDescriptorHandleForHeapStart;
+            var renderTargets = swapChain.GetBackBuffer<SharpDX.Direct3D12.Resource>(0);
+            device.CreateRenderTargetView(renderTargets, null, rtvHandle);
+            device.CreateRenderTargetView(resource, null, rtvHandle);
+            return swapChain;
+        }
+
+        private void Test()
+        {
+            DebugInterface.Get().EnableDebugLayer();
+
+            var swapChain = LoadPipeline();
+            
+            TextureCopyLocation destLocation;
+            TextureCopyLocation srcLocation;
+            using (var backBuffer = swapChain.GetBackBuffer<SharpDX.Direct3D12.Resource>(0))
+            {
+                var description = swapChain.Description;
+                var description1 = new SwapChainDescription1
+                {
+                    BufferCount = description.BufferCount,
+                    Flags = description.Flags,
+                    SampleDescription = description.SampleDescription,
+                    SwapEffect = description.SwapEffect,
+                    Usage = description.Usage,
+                    Format = description.ModeDescription.Format,
+                    Width = description.ModeDescription.Width,
+                    Height = description.ModeDescription.Height,
+                    AlphaMode = AlphaMode.Ignore,
+                    Scaling = Scaling.None,
+                    Stereo = false
+                };
+
+                Device device;
+                using (var factory = new Factory4())
+                {
+                    device = new Device(null, FeatureLevel.Level_12_0);
+                    _commandQueue = device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct));
+
+                    //using (var form = new RenderForm())
+                    //{
+                    //    var sc = new SwapChain1(factory, _commandQueue, form.Handle, ref description1);
+                    //}
+                }
+
+                PlacedSubResourceFootprint[] footprints = { new PlacedSubResourceFootprint() };
+                var buffRes = backBuffer.Description;
+                long bufftotalBytes;
+                device.GetCopyableFootprints(ref buffRes, 0, 1, 0, footprints, null, null, out bufftotalBytes);
+
+                var readBackBufferDescription = ResourceDescription.Buffer(new ResourceAllocationInformation
+                {
+                    Alignment = 0,
+                    SizeInBytes = bufftotalBytes
+                });
+
+                var screenTexture = device.CreateCommittedResource(
+                    new HeapProperties(HeapType.Readback)
+                    {
+                        CPUPageProperty = CpuPageProperty.Unknown,
+                        MemoryPoolPreference = MemoryPool.Unknown,
+                        CreationNodeMask = 1,
+                        VisibleNodeMask = 1
+                    },
+                    HeapFlags.None,
+                    readBackBufferDescription,
+                    ResourceStates.CopyDestination,
+                    null);
+                
+                destLocation = new TextureCopyLocation(screenTexture, new PlacedSubResourceFootprint {Footprint = footprints[0].Footprint });
+                srcLocation = new TextureCopyLocation(backBuffer, 0);
+
+                var commandAllocator = device.CreateCommandAllocator(CommandListType.Direct);
+                var commandList = device.CreateCommandList(CommandListType.Direct, commandAllocator, null);
+
+                //commandList.ResourceBarrierTransition(backBuffer, ResourceStates.Present,
+                //    ResourceStates.CopySource);
+
+                commandList.CopyTextureRegion(destLocation, 0, 0, 0, srcLocation, null);
+                //commandList.ResourceBarrierTransition(backBuffer, ResourceStates.CopySource,
+                //    ResourceStates.Present);
+
+                commandList.Close();
+                _commandQueue.ExecuteCommandList(commandList);
+
+                _fence = device.CreateFence(0, FenceFlags.None);
+                _fenceValue = 1;
+
+                _fenceEvent = new AutoResetEvent(false);
+
+                WaitForPreviousFrame();
+
+                var pnt = screenTexture.Map(0);
+
+                var dataRectangle = new DataRectangle
+                {
+                    DataPointer = pnt,
+                    Pitch = footprints[0].Footprint.RowPitch
+                };
+
+                var dataStream = new DataStream(new DataPointer(pnt, (int)bufftotalBytes));
+
+                var pixels = new List<byte[]>();
+                for (var y = 0; y < backBuffer.Description.Height; y++)
+                {
+                    for (var x = 0; x < backBuffer.Description.Width; x++)
+                    {
+                        dataStream.Seek((y * dataRectangle.Pitch) + (x * 4), SeekOrigin.Begin);
+                        var buffer = new byte[4];
+                        dataStream.Read(buffer, 0, 4);
+                        pixels.Add(buffer);
+                    }
+                }
+                
+                screenTexture.Unmap(0);
+
+                //_client.StreamData(pixelData);
+            }
+        }
+
+        private void WaitForPreviousFrame()
+        {
+            // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE. 
+            // This is code implemented as such for simplicity. 
+
+            int localFence = _fenceValue;
+            _commandQueue.Signal(this._fence, localFence);
+            _fenceValue++;
+
+            // Wait until the previous frame is finished.
+            if (_fence.CompletedValue < localFence)
+            {
+                _fence.SetEventOnCompletion(localFence, _fenceEvent.SafeWaitHandle.DangerousGetHandle());
+                _fenceEvent.WaitOne();
+            }
+
+            //frameIndex = swapChain.CurrentBackBufferIndex;
         }
     }
 }

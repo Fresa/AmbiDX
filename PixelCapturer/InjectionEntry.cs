@@ -8,6 +8,7 @@ using PixelCapturer.DirectX.Detectors;
 using PixelCapturer.DirectX.Handlers;
 using PixelCapturer.LightsConfiguration;
 using PixelCapturer.Logging;
+using SharpDX.Direct3D12;
 
 namespace PixelCapturer
 {
@@ -32,40 +33,49 @@ namespace PixelCapturer
                 Disconnect = Disconnect
             };
             _client.OnDisconnect += clientProxy.OnDisconnect;
+           // DebugInterface.Get().EnableDebugLayer();
         }
 
         public void Run(RemoteHooking.IContext context, string channelName, LightConfiguration lightConfiguration)
         {
-            Logger.Log($"Connected to target process with id {RemoteHooking.GetCurrentProcessId()}");
-
-            _reset = new ManualResetEvent(false);
-
-            var colorMapper = new ColorMapper(new PrevColorHolder(lightConfiguration), new GammaCorrection(), lightConfiguration);
-            var pixelCalculator = new PixelCalculator(lightConfiguration);
-
-            var directXLoader = new DirectXLoader(
-                new DirectXD3D9Detector(new D3D9PixelHandler(_client, colorMapper, pixelCalculator)),
-                new DirectXD3D10Detector(),
-                new DirectXD3D10Dot1Detector(),
-                new DirectXD3D11Detector(new D3D11PixelHandler(_client, colorMapper, pixelCalculator)),
-                new DirectXD3D12Detector());
-
-            var directXInterceptors = directXLoader.Load();
-
-            StartPeriodPinging();
-
-            Logger.Log("Waiting...");
-            _reset.WaitOne();
-
-            foreach (var directXInterceptor in directXInterceptors)
+            try
             {
-                directXInterceptor.Dispose();
-            }
-            directXLoader.Dispose();
+                Logger.Log($"Connected to target process with id {RemoteHooking.GetCurrentProcessId()}");
 
-            Logger.Log("Quiting.");
-            System.Runtime.Remoting.Channels.ChannelServices.UnregisterChannel(_clientServerChannel);
-            Thread.Sleep(1000);
+                _reset = new ManualResetEvent(false);
+
+                var colorMapper = new ColorMapper(new PrevColorHolder(lightConfiguration), new GammaCorrection(),
+                    lightConfiguration);
+                var pixelCalculator = new PixelCalculator(lightConfiguration);
+
+                var directXLoader = new DirectXLoader(
+                    new DirectXD3D9Detector(new D3D9PixelHandler(_client, colorMapper, pixelCalculator)),
+                    new DirectXD3D10Detector(),
+                    new DirectXD3D10Dot1Detector(),
+                    new DirectXD3D11Detector(new D3D11PixelHandler(_client, colorMapper, pixelCalculator)),
+                    new DirectXD3D12Detector(new D3D12PixelHandler(_client, colorMapper, pixelCalculator)));
+
+                var directXInterceptors = directXLoader.Load();
+
+                StartPeriodPinging();
+
+                Logger.Log("Waiting...");
+                _reset.WaitOne();
+
+                foreach (var directXInterceptor in directXInterceptors)
+                {
+                    directXInterceptor.Dispose();
+                }
+                directXLoader.Dispose();
+
+                Logger.Log("Quiting.");
+                System.Runtime.Remoting.Channels.ChannelServices.UnregisterChannel(_clientServerChannel);
+                Thread.Sleep(1000);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log(ex.Message + ", " + ex.StackTrace + ", " + (ex.InnerException?.Message ?? ""));
+            }
         }
 
         private void SetupClientServerChannel(string channelName)

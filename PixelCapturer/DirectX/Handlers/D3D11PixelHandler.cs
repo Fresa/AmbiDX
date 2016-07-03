@@ -5,6 +5,7 @@ using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using SharpDX.Windows;
 using Device = SharpDX.Direct3D11.Device;
+using MapFlags = SharpDX.Direct3D11.MapFlags;
 
 namespace PixelCapturer.DirectX.Handlers
 {
@@ -51,7 +52,7 @@ namespace PixelCapturer.DirectX.Handlers
                 DataStream dataStream;
 
                 var mapSource = _device.ImmediateContext.MapSubresource(_screenTexture, 0, MapMode.Read,
-                    SharpDX.Direct3D11.MapFlags.None, out dataStream);
+                    MapFlags.None, out dataStream);
                 var dataRectangle = new DataRectangle
                 {
                     DataPointer = mapSource.DataPointer,

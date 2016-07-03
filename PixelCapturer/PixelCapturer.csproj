@@ -22,6 +22,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -44,6 +45,10 @@
     </Reference>
     <Reference Include="SharpDX, Version=3.0.2.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
       <HintPath>..\packages\SharpDX.3.0.2\lib\net45\SharpDX.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SharpDX.D3DCompiler, Version=3.0.2.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.D3DCompiler.3.0.2\lib\net45\SharpDX.D3DCompiler.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="SharpDX.Desktop, Version=3.0.2.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
@@ -93,6 +98,8 @@
     <Compile Include="DirectX\Detectors\DirectXDetector.cs" />
     <Compile Include="DirectX\Detectors\IDirectXDetector.cs" />
     <Compile Include="DirectX\DirectXLoader.cs" />
+    <Compile Include="DirectX\Handlers\D3D12PixelHandler.cs" />
+    <Compile Include="DirectX\Handlers\IDirect3DDevice12Handler.cs" />
     <Compile Include="DirectX\Interceptors\Direct3DDevice11Interceptor.cs" />
     <Compile Include="DirectX\Interceptors\Direct3DDevice12Interceptor.cs" />
     <Compile Include="DirectX\Interceptors\D3D9DeviceVtbl.cs" />
@@ -102,6 +109,7 @@
     <Compile Include="DirectX\Handlers\IDirect3DDevice11Handler.cs" />
     <Compile Include="DirectX\Handlers\IDirect3DDevice9Handler.cs" />
     <Compile Include="DirectX\Interceptors\DummyInterceptor.cs" />
+    <Compile Include="DirectX\Interceptors\DxgiSwapChain1Vtbl.cs" />
     <Compile Include="DirectX\Interceptors\DxgiSwapChainVtbl.cs" />
     <Compile Include="DirectX\Interceptors\IDirectXInterceptor.cs" />
     <Compile Include="Display.cs" />

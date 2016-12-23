@@ -4,3 +4,5 @@ PixelCapturer/obj/
 FrontbufferCapturer/obj/
 AmbiDX/bin/
 AmbiDX/obj/
+!PixelCapturer/Easyhook*
+!PixelCapturer/Easyload*
